@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+backend/venv/
+*/venv/
+
+# Production builds
+.next/
+frontend/.next/
+build/
+dist/
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environment files
+.env
+.env*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System
+.DS_Store
+Thumbs.db
+
+# Database & local uploads (keep uploads dir, ignore contents)
+backend/ledger.db
+backend/uploads/bills/*
+!backend/uploads/bills/.gitkeep
