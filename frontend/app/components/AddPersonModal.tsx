@@ -27,7 +27,7 @@ export default function AddPersonModal({ isOpen, onClose, onSuccess }: Props) {
     try {
       setLoading(true);
       setError(null);
-      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/persons`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

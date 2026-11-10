@@ -51,7 +51,7 @@ export default function PersonDetailDrawer({
       setLoading(true);
       setError(null);
       const backendBase =
-        process.env.NEXT_PUBLIC_BACKEND_URL || "";
+        process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const params = new URLSearchParams();
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
@@ -86,7 +86,7 @@ export default function PersonDetailDrawer({
     try {
       setDeletingId(entryId);
       const backendBase =
-        process.env.NEXT_PUBLIC_BACKEND_URL || "";
+        process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/persons/entries/${entryId}`, {
         method: "DELETE",
       });
@@ -107,7 +107,7 @@ export default function PersonDetailDrawer({
     if (!window.confirm(`Delete party "${data.person.name}" and all associated entries?`)) return;
     try {
       const backendBase =
-        process.env.NEXT_PUBLIC_BACKEND_URL || "";
+        process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/persons/${personId}`, {
         method: "DELETE",
       });

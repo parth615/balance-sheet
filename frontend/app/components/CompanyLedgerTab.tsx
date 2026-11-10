@@ -48,7 +48,7 @@ export default function CompanyLedgerTab({
       setLoading(true);
       setError(null);
       const backendBase =
-        process.env.NEXT_PUBLIC_BACKEND_URL || "";
+        process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const params = new URLSearchParams();
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
@@ -77,7 +77,7 @@ export default function CompanyLedgerTab({
     try {
       setDeletingId(entryId);
       const backendBase =
-        process.env.NEXT_PUBLIC_BACKEND_URL || "";
+        process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/company/entries/${entryId}`, {
         method: "DELETE",
       });

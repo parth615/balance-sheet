@@ -65,7 +65,7 @@ export default function AddCompanyEntryModal({
       };
 
       const backendBase =
-        process.env.NEXT_PUBLIC_BACKEND_URL || "";
+        process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/company/entries`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

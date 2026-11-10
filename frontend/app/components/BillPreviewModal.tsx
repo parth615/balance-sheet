@@ -25,7 +25,7 @@ export default function BillPreviewModal({
   if (!billUrl) return null;
 
   // Prepend backend URL if relative
-  const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+  const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
   const fullUrl = billUrl.startsWith("http") ? billUrl : `${backendBase}${billUrl}`;
   const isPdf = billUrl.toLowerCase().endsWith(".pdf");
 

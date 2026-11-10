@@ -25,7 +25,7 @@ export default function LoginView({ onLoginSuccess }: Props) {
     try {
       setLoading(true);
       setError(null);
-      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

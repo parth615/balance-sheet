@@ -46,7 +46,7 @@ export default function StaffManagementTab({
     if (currentUser.role !== "ADMIN") return;
     try {
       setLoading(true);
-      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/users`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -74,7 +74,7 @@ export default function StaffManagementTab({
     }
 
     try {
-      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/users/${user.id}/status`, {
         method: "PUT",
         headers: {
@@ -102,7 +102,7 @@ export default function StaffManagementTab({
     }
 
     try {
-      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/users/${user.id}`, {
         method: "DELETE",
         headers: {
@@ -126,7 +126,7 @@ export default function StaffManagementTab({
     }
     try {
       setUpdatingOwnPassword(true);
-      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/auth/password`, {
         method: "PUT",
         headers: {

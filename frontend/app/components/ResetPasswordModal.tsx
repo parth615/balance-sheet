@@ -42,7 +42,7 @@ export default function ResetPasswordModal({
     try {
       setLoading(true);
       setError(null);
-      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/users/${user.id}/password`, {
         method: "PUT",
         headers: {

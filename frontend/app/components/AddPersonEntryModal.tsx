@@ -92,7 +92,7 @@ export default function AddPersonEntryModal({
       }
 
       const backendBase =
-        process.env.NEXT_PUBLIC_BACKEND_URL || "";
+        process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/persons/${personId}/entries`, {
         method: "POST",
         body: formData,

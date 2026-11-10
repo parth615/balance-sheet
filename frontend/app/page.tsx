@@ -131,7 +131,7 @@ export default function Home() {
   const [previewBillTitle, setPreviewBillTitle] = useState<string>("Bill Preview");
 
   const backendBase =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "";
+    process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
 
   // Fetch KPI Summary
   const fetchSummary = useCallback(async () => {
