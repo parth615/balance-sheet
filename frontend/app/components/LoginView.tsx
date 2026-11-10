@@ -35,7 +35,15 @@ export default function LoginView({ onLoginSuccess }: Props) {
         }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(
+          "Cannot reach Backend API. Please ensure your backend URL is set in Netlify Environment variables."
+        );
+      }
       if (!res.ok) {
         throw new Error(data.detail || "Authentication failed. Please check credentials.");
       }
