@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { PersonEntryType, PersonPaymentMode, PersonSummary } from "../types";
+import { getAuthHeaders } from "../utils/authHeaders";
 
 interface Props {
   isOpen: boolean;
@@ -95,6 +96,7 @@ export default function AddPersonEntryModal({
         process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/persons/${personId}/entries`, {
         method: "POST",
+        headers: getAuthHeaders(),
         body: formData,
       });
 

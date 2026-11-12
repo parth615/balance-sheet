@@ -22,6 +22,7 @@ import {
   CompanyEntryType,
 } from "../types";
 import { formatINR, formatDate } from "../utils/formatters";
+import { getAuthHeaders } from "../utils/authHeaders";
 
 interface Props {
   onOpenAddCompanyEntry: (defaultType?: CompanyEntryType) => void;
@@ -54,7 +55,8 @@ export default function CompanyLedgerTab({
       if (endDate) params.append("end_date", endDate);
 
       const res = await fetch(
-        `${backendBase}/api/company/ledger?${params.toString()}`
+        `${backendBase}/api/company/ledger?${params.toString()}`,
+        { headers: getAuthHeaders() }
       );
       if (!res.ok) {
         throw new Error("Failed to load company ledger");
@@ -80,6 +82,7 @@ export default function CompanyLedgerTab({
         process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/company/entries/${entryId}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       });
       if (!res.ok) {
         throw new Error("Failed to delete entry");

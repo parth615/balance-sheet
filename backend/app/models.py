@@ -61,6 +61,12 @@ class Person(Base):
     __tablename__ = "persons"
 
     id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     name = Column(String(255), nullable=False, index=True)
     phone = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -99,6 +105,12 @@ class CompanyLedger(Base):
     __tablename__ = "company_ledger"
 
     id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     entry_type = Column(SqlEnum(CompanyEntryType), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     entry_date = Column(Date, nullable=False, index=True)

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { X, UserPlus, Phone, User } from "lucide-react";
+import { getAuthHeaders } from "../utils/authHeaders";
 
 interface Props {
   isOpen: boolean;
@@ -30,7 +31,7 @@ export default function AddPersonModal({ isOpen, onClose, onSuccess }: Props) {
       const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/persons`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ name: name.trim(), phone: phone.trim() || null }),
       });
 

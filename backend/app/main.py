@@ -18,7 +18,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, inspect, text
 
 from .database import engine, Base, get_db
 from .models import (
@@ -90,11 +90,34 @@ BILLS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 
+def ensure_owner_id_columns(db: Session):
+    """Safely adds owner_id column to existing tables and assigns legacy rows to default admin."""
+    inspector = inspect(engine)
+    for table_name in ("persons", "company_ledger"):
+        if table_name in inspector.get_table_names():
+            cols = {c["name"] for c in inspector.get_columns(table_name)}
+            if "owner_id" not in cols:
+                db.execute(text(f"ALTER TABLE {table_name} ADD COLUMN owner_id INTEGER"))
+                db.commit()
+
+    # Assign any legacy rows with NULL owner_id to the primary admin
+    admin_user = db.query(User).filter(User.role == UserRole.ADMIN).order_by(User.id.asc()).first()
+    if admin_user:
+        db.query(Person).filter(Person.owner_id.is_(None)).update(
+            {"owner_id": admin_user.id}, synchronize_session=False
+        )
+        db.query(CompanyLedger).filter(CompanyLedger.owner_id.is_(None)).update(
+            {"owner_id": admin_user.id}, synchronize_session=False
+        )
+        db.commit()
+
+
 @app.on_event("startup")
 def on_startup():
     db = next(get_db())
     try:
         ensure_default_admin(db)
+        ensure_owner_id_columns(db)
     finally:
         db.close()
 
@@ -108,28 +131,39 @@ def get_status_label(net_balance: float) -> str:
 
 
 # ==========================================
-# 1. Dashboard Summary
+# 1. Dashboard Summary (Scoped to Current User)
 # ==========================================
 @app.get("/api/dashboard/summary", response_model=DashboardSummary)
-def get_dashboard_summary(db: Session = Depends(get_db)):
-    # 1. Total Market Demand (All Persons DEMAND entries)
+def get_dashboard_summary(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # 1. Total Market Demand (Current User's Persons DEMAND entries)
     market_demand = (
         db.query(func.coalesce(func.sum(PersonLedger.amount), 0.0))
-        .filter(PersonLedger.entry_type == PersonEntryType.DEMAND)
+        .join(Person, PersonLedger.person_id == Person.id)
+        .filter(
+            Person.owner_id == current_user.id,
+            PersonLedger.entry_type == PersonEntryType.DEMAND,
+        )
         .scalar()
     ) or 0.0
 
-    # 2. Total Paid to Market (All Persons PAYOUT entries)
+    # 2. Total Paid to Market (Current User's Persons PAYOUT entries)
     market_paid = (
         db.query(func.coalesce(func.sum(PersonLedger.amount), 0.0))
-        .filter(PersonLedger.entry_type == PersonEntryType.PAYOUT)
+        .join(Person, PersonLedger.person_id == Person.id)
+        .filter(
+            Person.owner_id == current_user.id,
+            PersonLedger.entry_type == PersonEntryType.PAYOUT,
+        )
         .scalar()
     ) or 0.0
 
     market_net_balance = float(market_paid) - float(market_demand)
 
     # Calculate payable vs advance per person
-    persons = db.query(Person).all()
+    persons = db.query(Person).filter(Person.owner_id == current_user.id).all()
     total_payable_market = 0.0
     total_advance_market = 0.0
 
@@ -159,20 +193,27 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     # 3. Company Requisition (Demanded)
     company_demanded = (
         db.query(func.coalesce(func.sum(CompanyLedger.amount), 0.0))
-        .filter(CompanyLedger.entry_type == CompanyEntryType.REQUISITION)
+        .filter(
+            CompanyLedger.owner_id == current_user.id,
+            CompanyLedger.entry_type == CompanyEntryType.REQUISITION,
+        )
         .scalar()
     ) or 0.0
 
     # 4. Company Received
     company_received = (
         db.query(func.coalesce(func.sum(CompanyLedger.amount), 0.0))
-        .filter(CompanyLedger.entry_type == CompanyEntryType.RECEIVED)
+        .filter(
+            CompanyLedger.owner_id == current_user.id,
+            CompanyLedger.entry_type == CompanyEntryType.RECEIVED,
+        )
         .scalar()
     ) or 0.0
 
     cash_received = (
         db.query(func.coalesce(func.sum(CompanyLedger.amount), 0.0))
         .filter(
+            CompanyLedger.owner_id == current_user.id,
             CompanyLedger.entry_type == CompanyEntryType.RECEIVED,
             CompanyLedger.payment_mode == CompanyPaymentMode.CASH,
         )
@@ -182,6 +223,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     cheque_received = (
         db.query(func.coalesce(func.sum(CompanyLedger.amount), 0.0))
         .filter(
+            CompanyLedger.owner_id == current_user.id,
             CompanyLedger.entry_type == CompanyEntryType.RECEIVED,
             CompanyLedger.payment_mode == CompanyPaymentMode.CHEQUE,
         )
@@ -191,6 +233,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     bank_received = (
         db.query(func.coalesce(func.sum(CompanyLedger.amount), 0.0))
         .filter(
+            CompanyLedger.owner_id == current_user.id,
             CompanyLedger.entry_type == CompanyEntryType.RECEIVED,
             CompanyLedger.payment_mode == CompanyPaymentMode.BANK_TRANSFER,
         )
@@ -219,11 +262,15 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
 
 
 # ==========================================
-# 2. Persons API
+# 2. Persons API (Scoped to Current User)
 # ==========================================
 @app.get("/api/persons", response_model=PersonsListResponse)
-def get_persons(search: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(Person)
+def get_persons(
+    search: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Person).filter(Person.owner_id == current_user.id)
     if search:
         query = query.filter(Person.name.ilike(f"%{search.strip()}%"))
 
@@ -289,12 +336,17 @@ def get_persons(search: Optional[str] = None, db: Session = Depends(get_db)):
 
 
 @app.post("/api/persons", response_model=PersonSummary, status_code=status.HTTP_201_CREATED)
-def create_person(payload: PersonCreate, db: Session = Depends(get_db)):
+def create_person(
+    payload: PersonCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     trimmed_name = payload.name.strip()
     if not trimmed_name:
         raise HTTPException(status_code=400, detail="Person name cannot be empty")
 
     person = Person(
+        owner_id=current_user.id,
         name=trimmed_name,
         phone=payload.phone.strip() if payload.phone else None,
         created_at=datetime.utcnow(),
@@ -323,9 +375,14 @@ def get_person_ledger(
     person_id: int,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    person = db.query(Person).filter(Person.id == person_id).first()
+    person = (
+        db.query(Person)
+        .filter(Person.id == person_id, Person.owner_id == current_user.id)
+        .first()
+    )
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 
@@ -430,9 +487,14 @@ def add_person_ledger_entry(
     reference_no: Optional[str] = Form(None),
     remarks: Optional[str] = Form(None),
     bill_file: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    person = db.query(Person).filter(Person.id == person_id).first()
+    person = (
+        db.query(Person)
+        .filter(Person.id == person_id, Person.owner_id == current_user.id)
+        .first()
+    )
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 
@@ -505,8 +567,17 @@ def add_person_ledger_entry(
 
 
 @app.delete("/api/persons/entries/{entry_id}", status_code=status.HTTP_200_OK)
-def delete_person_entry(entry_id: int, db: Session = Depends(get_db)):
-    entry = db.query(PersonLedger).filter(PersonLedger.id == entry_id).first()
+def delete_person_entry(
+    entry_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    entry = (
+        db.query(PersonLedger)
+        .join(Person, PersonLedger.person_id == Person.id)
+        .filter(PersonLedger.id == entry_id, Person.owner_id == current_user.id)
+        .first()
+    )
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
 
@@ -525,16 +596,18 @@ def delete_person_entry(entry_id: int, db: Session = Depends(get_db)):
 
 
 # ==========================================
-# 4. Company Ledger API
+# 4. Company Ledger API (Scoped to Current User)
 # ==========================================
 @app.get("/api/company/ledger", response_model=CompanyLedgerListResponse)
 def get_company_ledger(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     all_entries = (
         db.query(CompanyLedger)
+        .filter(CompanyLedger.owner_id == current_user.id)
         .order_by(CompanyLedger.entry_date.asc(), CompanyLedger.id.asc())
         .all()
     )
@@ -606,7 +679,9 @@ def get_company_ledger(
     status_code=status.HTTP_201_CREATED,
 )
 def add_company_ledger_entry(
-    payload: CompanyLedgerEntryCreate, db: Session = Depends(get_db)
+    payload: CompanyLedgerEntryCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
@@ -618,6 +693,7 @@ def add_company_ledger_entry(
         )
 
     entry = CompanyLedger(
+        owner_id=current_user.id,
         entry_type=payload.entry_type,
         amount=payload.amount,
         entry_date=payload.entry_date,
@@ -630,9 +706,10 @@ def add_company_ledger_entry(
     db.commit()
     db.refresh(entry)
 
-    # Compute running pending balance
+    # Compute running pending balance (for current user)
     all_prior = (
         db.query(CompanyLedger)
+        .filter(CompanyLedger.owner_id == current_user.id)
         .order_by(CompanyLedger.entry_date.asc(), CompanyLedger.id.asc())
         .all()
     )
@@ -659,8 +736,16 @@ def add_company_ledger_entry(
 
 
 @app.delete("/api/persons/{person_id}", status_code=status.HTTP_200_OK)
-def delete_person(person_id: int, db: Session = Depends(get_db)):
-    person = db.query(Person).filter(Person.id == person_id).first()
+def delete_person(
+    person_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    person = (
+        db.query(Person)
+        .filter(Person.id == person_id, Person.owner_id == current_user.id)
+        .first()
+    )
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
     db.delete(person)
@@ -669,8 +754,16 @@ def delete_person(person_id: int, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/company/entries/{entry_id}", status_code=status.HTTP_200_OK)
-def delete_company_entry(entry_id: int, db: Session = Depends(get_db)):
-    entry = db.query(CompanyLedger).filter(CompanyLedger.id == entry_id).first()
+def delete_company_entry(
+    entry_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    entry = (
+        db.query(CompanyLedger)
+        .filter(CompanyLedger.id == entry_id, CompanyLedger.owner_id == current_user.id)
+        .first()
+    )
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
 
@@ -680,19 +773,35 @@ def delete_company_entry(entry_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/clear-all", status_code=status.HTTP_200_OK)
-def clear_all_data(db: Session = Depends(get_db)):
-    """Removes all test cases, parties, and entries for a fresh empty ledger."""
-    db.query(PersonLedger).delete()
-    db.query(CompanyLedger).delete()
-    db.query(Person).delete()
+def clear_all_data(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Removes all parties and entries belonging to the current user for a fresh empty ledger."""
+    person_ids = [
+        pid for (pid,) in db.query(Person.id).filter(Person.owner_id == current_user.id).all()
+    ]
+    if person_ids:
+        db.query(PersonLedger).filter(PersonLedger.person_id.in_(person_ids)).delete(
+            synchronize_session=False
+        )
+    db.query(CompanyLedger).filter(CompanyLedger.owner_id == current_user.id).delete(
+        synchronize_session=False
+    )
+    db.query(Person).filter(Person.owner_id == current_user.id).delete(
+        synchronize_session=False
+    )
     db.commit()
-    return {"message": "All test cases and ledger data removed successfully. Ledger is now fresh and empty."}
+    return {"message": "Your private ledger data removed successfully. Ledger is now fresh and empty."}
 
 
 @app.post("/api/reset-seed", status_code=status.HTTP_200_OK)
-def reset_seed(db: Session = Depends(get_db)):
-    seed_database(db, force=True)
-    return {"message": "Database reset to sample state successfully"}
+def reset_seed(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    seed_database(db, force=True, owner_id=current_user.id)
+    return {"message": "Your private ledger reset to sample state successfully"}
 
 
 # ==========================================

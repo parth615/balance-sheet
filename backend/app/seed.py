@@ -152,18 +152,34 @@ def ensure_seed_bills():
             f.write(SAMPLE_BILL_2_SVG)
 
 
-def seed_database(db: Session, force: bool = False):
+def seed_database(db: Session, force: bool = False, owner_id: int | None = None):
     ensure_seed_bills()
 
-    existing_persons = db.query(Person).count()
+    person_q = db.query(Person)
+    if owner_id is not None:
+        person_q = person_q.filter(Person.owner_id == owner_id)
+    existing_persons = person_q.count()
     if existing_persons > 0 and not force:
         return
 
-    # Clear existing if force
+    # Clear existing if force (scoped to owner_id when provided)
     if force:
-        db.query(PersonLedger).delete()
-        db.query(CompanyLedger).delete()
-        db.query(Person).delete()
+        if owner_id is not None:
+            person_ids = [
+                pid for (pid,) in db.query(Person.id).filter(Person.owner_id == owner_id).all()
+            ]
+            if person_ids:
+                db.query(PersonLedger).filter(PersonLedger.person_id.in_(person_ids)).delete(
+                    synchronize_session=False
+                )
+            db.query(Person).filter(Person.owner_id == owner_id).delete(synchronize_session=False)
+            db.query(CompanyLedger).filter(CompanyLedger.owner_id == owner_id).delete(
+                synchronize_session=False
+            )
+        else:
+            db.query(PersonLedger).delete()
+            db.query(CompanyLedger).delete()
+            db.query(Person).delete()
         db.commit()
 
     today = date.today()
@@ -172,7 +188,7 @@ def seed_database(db: Session, force: bool = False):
     # Demand: 45,000 (with bill) + 25,000 = 70,000
     # Paid: 30,000 (UPI)
     # Net Balance = 30,000 - 70,000 = -40,000 (MINUS / Payable - Red)
-    p1 = Person(name="Ramesh Sharma (Cement & Materials)", phone="+91 98765 43210")
+    p1 = Person(owner_id=owner_id, name="Ramesh Sharma (Cement & Materials)", phone="+91 98765 43210")
     db.add(p1)
     db.flush()
 
@@ -207,7 +223,7 @@ def seed_database(db: Session, force: bool = False):
     # Demand: 18,000
     # Paid: 25,000 (Cheque)
     # Net Balance = 25,000 - 18,000 = +7,000 (PLUS / Extra Advance Paid - Green)
-    p2 = Person(name="Suresh Patel (Electrical Contractor)", phone="+91 98234 56789")
+    p2 = Person(owner_id=owner_id, name="Suresh Patel (Electrical Contractor)", phone="+91 98234 56789")
     db.add(p2)
     db.flush()
 
@@ -234,7 +250,7 @@ def seed_database(db: Session, force: bool = False):
     # Demand: 12,500
     # Paid: 12,500
     # Net Balance = 0 (Settled - Grey)
-    p3 = Person(name="Mohan Lal (Transport & Logistics)", phone="+91 97112 33445")
+    p3 = Person(owner_id=owner_id, name="Mohan Lal (Transport & Logistics)", phone="+91 97112 33445")
     db.add(p3)
     db.flush()
 
@@ -270,12 +286,14 @@ def seed_database(db: Session, force: bool = False):
     # Net Market Balance = 67,500 - 100,500 = -33,000 (Payable)
     # Net Cash in Hand = Total Received (100,000) - Total Paid to Market (67,500) = +32,500
     c1 = CompanyLedger(
+        owner_id=owner_id,
         entry_type=CompanyEntryType.REQUISITION,
         amount=80000.00,
         entry_date=today - timedelta(days=14),
         remarks="Monthly site advance requisition for raw materials and vendor advances",
     )
     c2 = CompanyLedger(
+        owner_id=owner_id,
         entry_type=CompanyEntryType.RECEIVED,
         amount=50000.00,
         entry_date=today - timedelta(days=12),
@@ -284,12 +302,14 @@ def seed_database(db: Session, force: bool = False):
         remarks="Company released first tranche via Axis Bank cheque",
     )
     c3 = CompanyLedger(
+        owner_id=owner_id,
         entry_type=CompanyEntryType.REQUISITION,
         amount=30000.00,
         entry_date=today - timedelta(days=9),
         remarks="Requisition for electrical cabling and transport settlement",
     )
     c4 = CompanyLedger(
+        owner_id=owner_id,
         entry_type=CompanyEntryType.RECEIVED,
         amount=40000.00,
         entry_date=today - timedelta(days=6),
@@ -298,6 +318,7 @@ def seed_database(db: Session, force: bool = False):
         remarks="RTGS credit received directly into site operating account",
     )
     c5 = CompanyLedger(
+        owner_id=owner_id,
         entry_type=CompanyEntryType.RECEIVED,
         amount=10000.00,
         entry_date=today - timedelta(days=4),

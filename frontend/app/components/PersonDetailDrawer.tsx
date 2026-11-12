@@ -21,6 +21,7 @@ import {
   PersonEntryType,
 } from "../types";
 import { formatINR, formatDate, getInitials, getAvatarColor } from "../utils/formatters";
+import { getAuthHeaders } from "../utils/authHeaders";
 
 interface Props {
   personId: number | null;
@@ -57,7 +58,8 @@ export default function PersonDetailDrawer({
       if (endDate) params.append("end_date", endDate);
 
       const res = await fetch(
-        `${backendBase}/api/persons/${personId}/ledger?${params.toString()}`
+        `${backendBase}/api/persons/${personId}/ledger?${params.toString()}`,
+        { headers: getAuthHeaders() }
       );
       if (!res.ok) {
         throw new Error("Failed to load person ledger");
@@ -89,6 +91,7 @@ export default function PersonDetailDrawer({
         process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/persons/entries/${entryId}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       });
       if (!res.ok) {
         throw new Error("Failed to delete entry");
@@ -110,6 +113,7 @@ export default function PersonDetailDrawer({
         process.env.NEXT_PUBLIC_BACKEND_URL || "https://balance-sheet-backend.onrender.com";
       const res = await fetch(`${backendBase}/api/persons/${personId}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error("Failed to delete party");
       onLedgerUpdated();

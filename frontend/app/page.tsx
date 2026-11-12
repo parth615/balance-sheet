@@ -43,6 +43,7 @@ import AddCompanyEntryModal from "./components/AddCompanyEntryModal";
 import StaffManagementTab from "./components/StaffManagementTab";
 import LoginView from "./components/LoginView";
 import { formatINR, getInitials, getAvatarColor } from "./utils/formatters";
+import { getAuthHeaders } from "./utils/authHeaders";
 
 type NavTab = "customers" | "suppliers" | "cashbook" | "reports" | "settings" | "staff";
 
@@ -79,6 +80,19 @@ export default function Home() {
   const handleLogout = () => {
     setToken(null);
     setCurrentUser(null);
+    setSummary(null);
+    setPersonsData({
+      items: [],
+      grand_totals: {
+        total_demand_all: 0,
+        total_paid_all: 0,
+        net_balance_all: 0,
+        total_payable_market: 0,
+        total_advance_market: 0,
+      },
+    });
+    setSelectedPersonId(null);
+    setActiveNav("customers");
     localStorage.removeItem("bs_auth_token");
     localStorage.removeItem("bs_auth_user");
   };
@@ -135,9 +149,16 @@ export default function Home() {
 
   // Fetch KPI Summary
   const fetchSummary = useCallback(async () => {
+    if (!token) return;
     try {
       setSummaryLoading(true);
-      const res = await fetch(`${backendBase}/api/dashboard/summary`);
+      const res = await fetch(`${backendBase}/api/dashboard/summary`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.status === 401) {
+        handleLogout();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setSummary(data);
@@ -147,17 +168,24 @@ export default function Home() {
     } finally {
       setSummaryLoading(false);
     }
-  }, [backendBase]);
+  }, [backendBase, token]);
 
   // Fetch Persons List
   const fetchPersons = useCallback(async () => {
+    if (!token) return;
     try {
       setPersonsLoading(true);
       const params = new URLSearchParams();
       if (searchQuery.trim()) {
         params.append("search", searchQuery.trim());
       }
-      const res = await fetch(`${backendBase}/api/persons?${params.toString()}`);
+      const res = await fetch(`${backendBase}/api/persons?${params.toString()}`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.status === 401) {
+        handleLogout();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setPersonsData(data);
@@ -167,15 +195,19 @@ export default function Home() {
     } finally {
       setPersonsLoading(false);
     }
-  }, [backendBase, searchQuery]);
+  }, [backendBase, searchQuery, token]);
 
   useEffect(() => {
-    fetchSummary();
-  }, [fetchSummary]);
+    if (token) {
+      fetchSummary();
+    }
+  }, [fetchSummary, token]);
 
   useEffect(() => {
-    fetchPersons();
-  }, [fetchPersons]);
+    if (token) {
+      fetchPersons();
+    }
+  }, [fetchPersons, token]);
 
   const handleRefreshAll = (msg?: string) => {
     fetchSummary();
@@ -184,9 +216,12 @@ export default function Home() {
   };
 
   const handleResetSeed = async () => {
-    if (!window.confirm("Load sample demonstration records?")) return;
+    if (!window.confirm("Load sample demonstration records into your private ledger?")) return;
     try {
-      const res = await fetch(`${backendBase}/api/reset-seed`, { method: "POST" });
+      const res = await fetch(`${backendBase}/api/reset-seed`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         handleRefreshAll("Loaded sample records successfully");
         if (selectedPersonId) setSelectedPersonId(null);
@@ -197,11 +232,14 @@ export default function Home() {
   };
 
   const handleClearAll = async () => {
-    if (!window.confirm("Are you sure you want to remove all records and test cases? This will give you a fresh empty balance sheet.")) return;
+    if (!window.confirm("Are you sure you want to remove all records from your private ledger? This will give you a fresh empty balance sheet.")) return;
     try {
-      const res = await fetch(`${backendBase}/api/clear-all`, { method: "POST" });
+      const res = await fetch(`${backendBase}/api/clear-all`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
-        handleRefreshAll("All test cases and records removed successfully");
+        handleRefreshAll("Your private ledger data removed successfully");
         if (selectedPersonId) setSelectedPersonId(null);
       }
     } catch (err) {
